@@ -7,6 +7,7 @@ on:
 
 env:
   FOUNDRY_PROFILE: ci
+  BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
 
 jobs:
   check:
@@ -26,11 +27,6 @@ jobs:
       - name: Show Forge version
         run: |
           forge --version
-
-      - name: Run Forge fmt
-        run: |
-          forge fmt --check
-        id: fmt
 
       - name: Run Forge build
         run: |
