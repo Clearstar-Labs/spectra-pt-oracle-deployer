@@ -4,33 +4,9 @@ pragma solidity ^0.8.13;
 import {Test, console} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-
-interface ISpectraPriceOracle {
-    function PT() external view returns (address);
-    function discountModel() external view returns (address);
-    function initialImpliedAPY() external view returns (uint256);
-    function latestRoundData() external view returns (
-        uint80 roundId,
-        int256 answer,
-        uint256 startedAt,
-        uint256 updatedAt,
-        uint80 answeredInRound
-    );
-}
-
-interface ISpectraPriceOracleFactory {
-    function createOracle(
-        address _pt,
-        address _discountModel,
-        uint256 initialImpliedAPY,
-        address initOwner
-    ) external returns (address);
-}
-
-interface IPrincipalToken is IERC4626 {
-    function getIBT() external view returns (address);
-    function maturity() external view returns (uint256);
-}
+import {IPrincipalToken} from "./interfaces/IPrincipalToken.sol";
+import {ISpectraPriceOracleFactory} from "./interfaces/ISpectraPriceOracleFactory.sol";
+import {ISpectraPriceOracle} from "./interfaces/ISpectraPriceOracle.sol";
 
 contract SpectraOracleDeployerTest is Test {
     IPrincipalToken public principalToken;
