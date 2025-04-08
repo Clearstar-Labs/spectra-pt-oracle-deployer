@@ -20,10 +20,10 @@ contract CounterTest is Test {
         vm.selectFork(fork);
         
         // Initialize PT contract interface
-        principalToken = IPrincipalToken(0x95590e979a72b6b04d829806e8f29aa909ed3a86);
+        principalToken = IPrincipalToken(0x95590E979A72B6b04D829806E8F29aa909eD3a86);
     }
 
-    function test_VerifyPT() public {
+    function test_VerifyPT() public view {
         // Get and log the IBT address
         address ibt = principalToken.getIBT();
         console.log("IBT address:", ibt);
@@ -42,7 +42,7 @@ contract CounterTest is Test {
         assertTrue(maturityTimestamp > block.timestamp, "Should have future maturity");
     }
 
-    function test_ChainID() public {
+    function test_ChainID() public view {
         assertEq(block.chainid, 8453); // Base mainnet chain ID
     }
 }
