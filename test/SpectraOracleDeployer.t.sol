@@ -14,6 +14,8 @@ contract SpectraOracleDeployerTest is Test {
     uint256 public fork;
     address constant FACTORY_ADDRESS = 0xAA055F599f698E5334078F4921600Bd16CceD561;
     address constant ZCB_MODEL = 0xf0DB3482c20Fc6E124D5B5C60BdF30BD13EC87aE;
+    address constant PT_FUSDC = 0x95590E979A72B6b04D829806E8F29aa909eD3a86;
+    address constant PT_CUSDO = 0x1155d1731B495BF22f016e13cAfb6aFA53BD8a28;
 
     function setUp() public {
         // Create and select a fork of Base
@@ -21,7 +23,7 @@ contract SpectraOracleDeployerTest is Test {
         vm.selectFork(fork);
         
         // Initialize PT contract interface
-        principalToken = IPrincipalToken(0x95590E979A72B6b04D829806E8F29aa909eD3a86);
+        principalToken = IPrincipalToken(PT_CUSDO);
         factory = ISpectraPriceOracleFactory(FACTORY_ADDRESS);
     }
 
@@ -58,6 +60,10 @@ contract SpectraOracleDeployerTest is Test {
         address ibt = principalToken.getIBT();
         console.log("IBT address:", ibt);
         
+        // Get and log the underlying token address through IBT
+        address underlying = IERC4626(ibt).asset();
+        console.log("Underlying token address:", underlying);
+        
         // Get and log maturity timestamp
         uint256 maturityTimestamp = principalToken.maturity();
         console.log("PT maturity timestamp:", maturityTimestamp);
@@ -68,6 +74,8 @@ contract SpectraOracleDeployerTest is Test {
 
         // Verify this is a real PT by checking it has an IBT
         assertTrue(ibt != address(0), "Should have valid IBT address");
+        // Verify this is a real IBT by checking it has an underlying
+        assertTrue(underlying != address(0), "Should have valid underlying address");
         // Verify maturity is in the future
         assertTrue(maturityTimestamp > block.timestamp, "Should have future maturity");
     }
