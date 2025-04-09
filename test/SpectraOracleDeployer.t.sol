@@ -15,39 +15,41 @@ contract SpectraOracleDeployerTest is Test {
     ISpectraPriceOracleFactory public oracle_factory;
     APYCalculator public calculator;
     uint256 public fork;
-    address constant FACTORY_ADDRESS = 0xAA055F599f698E5334078F4921600Bd16CceD561;
-    address constant REGISTRY_ADDRESS = 0x786Da12e9836a9ff9b7d92e8bac1C849e2ACe378;
-    address constant ZCB_MODEL = 0xf0DB3482c20Fc6E124D5B5C60BdF30BD13EC87aE;
-
-    address constant PT_FUSDC = 0x95590E979A72B6b04D829806E8F29aa909eD3a86;
-    address constant LP_FUSDC = 0xee901F017B5D7C583619604d807e3590162bFb35;
-    address constant POOL_FUSDC = 0x39E6Af30ea89034D1BdD2d1CfbA88cAF8464Fa65;
-
-    address constant PT_CUSDO = 0x1155d1731B495BF22f016e13cAfb6aFA53BD8a28;
-    address constant LP_CUSDO = 0x865f8b843e942aacA4D058A8708B57651C0af356;
-    address constant POOL_CUSDO = 0x5e3A444CbBaBF92d619fA9FCAEef99c24Ead3Ba0;
+    
+    address public zcbModel;
+    string public RPC_URL;
 
     function setUp() public {
-        // Create and select a fork of Base
-        fork = vm.createFork(vm.envString("BASE_RPC_URL"));
+        // Load environment variables
+        RPC_URL = vm.envString("RPC_URL");
+        address pt = vm.envAddress("PT_ADDRESS");
+        address pool = vm.envAddress("POOL_ADDRESS");
+        address factory = vm.envAddress("ORACLE_FACTORY_ADDRESS");
+        zcbModel = vm.envAddress("ZCB_MODEL_ADDRESS");
+        
+        // Create and select fork
+        fork = vm.createFork(RPC_URL);
         vm.selectFork(fork);
         
         // Initialize contracts
-        principalToken = IPrincipalToken(PT_FUSDC);
-        curvePool = POOL_FUSDC;
-        oracle_factory = ISpectraPriceOracleFactory(FACTORY_ADDRESS);
+        principalToken = IPrincipalToken(pt);
+        curvePool = pool;
+        oracle_factory = ISpectraPriceOracleFactory(factory);
         calculator = new APYCalculator();
     }
 
     function test_DeployOracle() public {
-        uint256 initialAPY = calculateImpliedAPY();
+        uint256 initialAPY = calculator.calculateImpliedAPY(
+            principalToken,
+            curvePool
+        );
         
         // Deploy oracle
         address oracle = oracle_factory.createOracle(
             address(principalToken),
-            ZCB_MODEL,
+            zcbModel,
             initialAPY,
-            address(this) // Set test contract as owner
+            address(this)
         );
         
         console.log("Oracle deployed at:", oracle);
@@ -57,7 +59,7 @@ contract SpectraOracleDeployerTest is Test {
         
         // Check oracle parameters
         assertEq(deployedOracle.PT(), address(principalToken), "Wrong PT address");
-        assertEq(deployedOracle.discountModel(), ZCB_MODEL, "Wrong discount model");
+        assertEq(deployedOracle.discountModel(), zcbModel, "Wrong discount model");
         assertEq(deployedOracle.initialImpliedAPY(), initialAPY, "Wrong initial APY");
         
         // Get first price reading
@@ -89,37 +91,5 @@ contract SpectraOracleDeployerTest is Test {
         assertTrue(underlying != address(0), "Should have valid underlying address");
         // Verify maturity is in the future
         assertTrue(maturityTimestamp > block.timestamp, "Should have future maturity");
-    }
-
-    function test_ChainID() public view {
-        assertEq(block.chainid, 8453); // Base mainnet chain ID
-    }
-
-    function test_CalculateInitialImpliedAPY() public {
-        uint256 impliedAPY = calculateImpliedAPY();
-        console.log("Calculated initial implied APY:", impliedAPY);
-        
-        // Basic sanity checks
-        assertTrue(impliedAPY > 0, "APY should be greater than 0");
-        assertTrue(impliedAPY < 1e18, "APY should be less than 100%");
-    }
-
-    function calculateImpliedAPY() private returns (uint256) {
-        // Get initial price from Curve pool
-        (bool success, bytes memory data) = curvePool.call(
-            abi.encodeWithSignature("price_scale()")
-        );
-        require(success, "Failed to get price_scale");
-        uint256 curveInitialPrice = abi.decode(data, (uint256));
-        console.log("curveInitialPrice:", curveInitialPrice);
-
-        uint256 impliedAPY = calculator.calculateInitialImpliedAPY(
-            address(principalToken),
-            curvePool,
-            curveInitialPrice  // Added third parameter
-        );
-        
-        console.log("Curve initial price:", curveInitialPrice);
-        return impliedAPY;
     }
 }

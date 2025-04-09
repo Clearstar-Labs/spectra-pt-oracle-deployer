@@ -26,7 +26,7 @@ contract APYCalculator is Test {
         
         uint256 currentPricePerShare = vault.getPricePerFullShare();
         
-        uint256 forkId = vm.createFork(vm.envString("BASE_RPC_URL"), pastBlock);
+        uint256 forkId = vm.createFork(vm.envString("RPC_URL"), pastBlock);
         vm.selectFork(forkId);
         uint256 pastPricePerShare = vault.getPricePerFullShare();
         
@@ -59,10 +59,9 @@ contract APYCalculator is Test {
         return impliedAPY;
     }
 
-    function calculateInitialImpliedAPY(
-        address pt,
-        address curvePool,
-        uint256 /* curveInitialPrice - not used anymore */
+    function calculateImpliedAPY(
+        IPrincipalToken pt,
+        address curvePool
     ) external returns (uint256) {
         require(curvePool != address(0), "Curve pool not found");
 
