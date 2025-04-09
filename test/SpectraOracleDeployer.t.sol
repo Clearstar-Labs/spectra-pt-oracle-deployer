@@ -6,21 +6,16 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {IPrincipalToken} from "./interfaces/IPrincipalToken.sol";
 import {ISpectraPriceOracleFactory} from "./interfaces/ISpectraPriceOracleFactory.sol";
-import {ISpectraFactory} from "./interfaces/ISpectraFactory.sol";
 import {ISpectraPriceOracle} from "./interfaces/ISpectraPriceOracle.sol";
-import {IRegistry} from "./interfaces/IRegistry.sol";
-import {ICurveAddressProvider} from "./interfaces/ICurveAddressProvider.sol";
 import {APYCalculator} from "./utils/APYCalculator.sol";
 
 contract SpectraOracleDeployerTest is Test {
     IPrincipalToken public principalToken;
     address public curvePool;
     ISpectraPriceOracleFactory public oracle_factory;
-    ISpectraFactory public spectra_factory;
     APYCalculator public calculator;
     uint256 public fork;
     address constant FACTORY_ADDRESS = 0xAA055F599f698E5334078F4921600Bd16CceD561;
-    address constant SPECTRA_FACTORY_ADDRESS = 0x51100574E1CF11ee9fcC96D70ED146250b0Fdb60; // Add the actual address
     address constant REGISTRY_ADDRESS = 0x786Da12e9836a9ff9b7d92e8bac1C849e2ACe378;
     address constant ZCB_MODEL = 0xf0DB3482c20Fc6E124D5B5C60BdF30BD13EC87aE;
 
@@ -41,14 +36,11 @@ contract SpectraOracleDeployerTest is Test {
         principalToken = IPrincipalToken(PT_FUSDC);
         curvePool = POOL_FUSDC;
         oracle_factory = ISpectraPriceOracleFactory(FACTORY_ADDRESS);
-        spectra_factory = ISpectraFactory(SPECTRA_FACTORY_ADDRESS);
         calculator = new APYCalculator();
     }
 
     function test_DeployOracle() public {
-        // uint256 initialAPY = calculateImpliedAPY();
-        // Initial APY of 5%
-        uint256 initialAPY = 0.051e18;
+        uint256 initialAPY = calculateImpliedAPY();
         
         // Deploy oracle
         address oracle = oracle_factory.createOracle(
@@ -121,43 +113,13 @@ contract SpectraOracleDeployerTest is Test {
         uint256 curveInitialPrice = abi.decode(data, (uint256));
         console.log("curveInitialPrice:", curveInitialPrice);
 
-        // uint256 curveInitialPrice = 934000000000000000;
-        
         uint256 impliedAPY = calculator.calculateInitialImpliedAPY(
             address(principalToken),
-            curveInitialPrice
+            curvePool,
+            curveInitialPrice  // Added third parameter
         );
         
         console.log("Curve initial price:", curveInitialPrice);
         return impliedAPY;
     }
-
-    // function test_GetAllPTsAndCurvePools() public {
-    //     // Get Registry and Curve Address Provider addresses
-    //     address registryAddress = spectra_factory.getRegistry();
-    //     //address curveAddressProvider = spectra_factory.getCurveAddressProvider();
-        
-    //     console.log("Registry address:", registryAddress);
-    //     //console.log("Curve Address Provider:", curveAddressProvider);
-        
-    //     // // Create interface instances
-    //     // IRegistry registry = IRegistry(registryAddress);
-    //     // ICurveAddressProvider provider = ICurveAddressProvider(curveAddressProvider);
-        
-    //     // // Get total number of PTs
-    //     // uint256 totalPTs = registry.pTCount();
-    //     // console.log("Total number of PTs:", totalPTs);
-        
-    //     // // Loop through all PTs
-    //     // for (uint256 i = 0; i < totalPTs; i++) {
-    //     //     address pt = registry.getPTAt(i);
-    //     //     // According to Curve documentation, curve factory address is at index 6
-    //     //     address curveAddress = provider.get_address(6);
-            
-    //     //     console.log("PT Index:", i);
-    //     //     console.log("PT Address:", pt);
-    //     //     console.log("Curve Factory Address:", curveAddress);
-    //     //     console.log("-------------------");
-    //     // }
-    // }
 }

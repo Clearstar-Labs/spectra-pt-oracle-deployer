@@ -1,9 +1,9 @@
-// SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.22;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.13;
 
 import {IPrincipalToken} from "../interfaces/IPrincipalToken.sol";
 import {IVaultV2} from "../interfaces/IVaultV2.sol";
-import {LogExpMath} from "./LogExpMath.sol";
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
 
@@ -40,18 +40,18 @@ contract APYCalculator is Test {
     function calculateFixedRate(
         uint256 timeToMaturity,
         uint256 curveInitialPrice
-    ) private view returns (uint256) {
+    ) private pure returns (uint256) {
         // First convert timeToMaturity to years to avoid overflow
-        uint256 timeToMaturityInYears = (timeToMaturity * UNIT) / SECONDS_PER_YEAR;
+        uint256 timeToMaturityScaled = (timeToMaturity * UNIT) / SECONDS_PER_YEAR;
         
         // Calculate the discount
         uint256 discount = UNIT - curveInitialPrice;
         
         // Calculate annualized rate: discount / timeInYears
-        uint256 impliedAPY = (discount * UNIT) / timeToMaturityInYears;
+        uint256 impliedAPY = (discount * UNIT) / timeToMaturityScaled;
         
         console.log("timeToMaturity (seconds):", timeToMaturity);
-        console.log("timeToMaturity (years):", timeToMaturityInYears);
+        console.log("Time to Maturity (scaled to 1e18):", timeToMaturityScaled);
         console.log("curve price:", curveInitialPrice);
         console.log("discount:", discount);
         console.log("implied APY:", impliedAPY);
@@ -61,18 +61,37 @@ contract APYCalculator is Test {
 
     function calculateInitialImpliedAPY(
         address pt,
-        uint256 curveInitialPrice
+        address curvePool,
+        uint256 /* curveInitialPrice - not used anymore */
     ) external returns (uint256) {
-        require(curveInitialPrice >= MIN_CURVE_PRICE, "Curve price too low");
-        require(curveInitialPrice <= MAX_CURVE_PRICE, "Curve price too high");
+        require(curvePool != address(0), "Curve pool not found");
 
-        IPrincipalToken principalToken = IPrincipalToken(pt);
-        IVaultV2 vault = IVaultV2(principalToken.getIBT());
+        // Get current price from Curve pool (in IBT/PT terms)
+        (bool success, bytes memory data) = curvePool.call(
+            abi.encodeWithSignature("last_prices()")
+        );
+        require(success, "Failed to get current price");
+        uint256 ibtPrice = abi.decode(data, (uint256));
         
-        uint256 ibtYield = calculateIBTYield(vault, block.number);
-        console.log("IBT Yield:", ibtYield);
+        // Convert IBT price to underlying price using IBT's previewRedeem
+        address ibt = IPrincipalToken(pt).getIBT();
+        uint256 currentPrice = IERC4626(ibt).previewRedeem(ibtPrice);
         
-        require(ibtYield <= MAX_REASONABLE_APY, "APY too high");
-        return ibtYield;
+        require(currentPrice >= MIN_CURVE_PRICE, "Curve price too low");
+        require(currentPrice <= MAX_CURVE_PRICE, "Curve price too high");
+
+        uint256 timeToMaturity = IPrincipalToken(pt).maturity() - block.timestamp;
+        uint256 timeToMaturityScaled = (timeToMaturity * UNIT) / SECONDS_PER_YEAR;
+        uint256 discount = UNIT - currentPrice;
+        uint256 impliedAPY = (discount * UNIT) / timeToMaturityScaled;
+        
+        console.log("IBT/PT Curve Price:", ibtPrice);
+        console.log("Underlying Price:", currentPrice);
+        console.log("Time to Maturity (years):", timeToMaturityScaled);
+        console.log("Discount:", discount);
+        console.log("Implied APY:", impliedAPY);
+        
+        require(impliedAPY <= MAX_REASONABLE_APY, "APY too high");
+        return impliedAPY;
     }
 }
