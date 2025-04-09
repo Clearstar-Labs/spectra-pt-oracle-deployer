@@ -64,3 +64,5 @@ $ forge --help
 $ anvil --help
 $ cast --help
 ```
+
+forge script script/DeployOracle.s.sol:DeployOracleScript --rpc-url $RPC_URL --private-key $PRIVATE_KEY -vvv
