@@ -27,6 +27,7 @@ The PT and POOL addresses need to belong together.
 #### Oracle Parameters
 INITIAL_IMPLIED_APY="1000000000000000000" # 1.0 in 18 decimals
 ORACLE_OWNER="0x..." # Address that will own the oracle
+The owner can change pricing models so this address should be secure. Preferably a multi-sig.
 
 INITIAL_IMPLIED_APY will be used by the oracle for the price calculation so it is extremely important to get it right.
 The tests are meant to help you determine this.
@@ -152,5 +153,5 @@ MATURITY_DAYS = 365  # 1-year maturity
 
 It will show the models diverge (because of compounding) with higher interest rates and durations.
 
-![Example](images/PT Token Pricing Comparison.jpg)
+![Example](images/PT_Token_Pricing_Comparison.jpg)
 
