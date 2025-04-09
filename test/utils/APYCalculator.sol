@@ -12,7 +12,7 @@ contract APYCalculator is Test {
     uint256 private constant SECONDS_PER_YEAR = 365 days;
     uint256 private constant SECONDS_PER_DAY = 1 days;
     uint256 private constant BLOCKS_PER_DAY = 43_200;
-    uint256 private constant DAYS_TO_LOOK_BACK = 7;
+    uint256 private constant DAYS_TO_LOOK_BACK = 1;
     uint256 private constant MIN_CURVE_PRICE = 5e17;
     uint256 private constant MAX_CURVE_PRICE = 99e16;
     uint256 private constant MAX_REASONABLE_APY = 2e18;
@@ -41,25 +41,22 @@ contract APYCalculator is Test {
         uint256 timeToMaturity,
         uint256 curveInitialPrice
     ) private view returns (uint256) {
+        // First convert timeToMaturity to years to avoid overflow
         uint256 timeToMaturityInYears = (timeToMaturity * UNIT) / SECONDS_PER_YEAR;
         
-        // Calculate -ln(price)/t
-        // The curve price is already in 1e18 scale
-        int256 lnPrice = LogExpMath.ln(int256(curveInitialPrice));
+        // Calculate the discount
+        uint256 discount = UNIT - curveInitialPrice;
         
-        // Calculate -ln(price)/t and convert to yield
-        // Multiply by UNIT first to maintain precision before division
-        int256 ratePerYear = (-lnPrice * int256(UNIT)) / int256(timeToMaturityInYears) / 10;
-        int256 yield = (LogExpMath.exp(ratePerYear) - int256(UNIT));
+        // Calculate annualized rate: discount / timeInYears
+        uint256 impliedAPY = (discount * UNIT) / timeToMaturityInYears;
         
-        console.log("timeToMaturity:", timeToMaturity);
-        console.log("timeToMaturityInYears:", timeToMaturityInYears);
+        console.log("timeToMaturity (seconds):", timeToMaturity);
+        console.log("timeToMaturity (years):", timeToMaturityInYears);
         console.log("curve price:", curveInitialPrice);
-        console.log("ln(price):", uint256(-lnPrice));
-        console.log("ratePerYear:", uint256(ratePerYear));
-        console.log("yield:", uint256(yield));
+        console.log("discount:", discount);
+        console.log("implied APY:", impliedAPY);
         
-        return uint256(yield > 0 ? yield : int256(0));
+        return impliedAPY;
     }
 
     function calculateInitialImpliedAPY(
@@ -75,12 +72,7 @@ contract APYCalculator is Test {
         uint256 ibtYield = calculateIBTYield(vault, block.number);
         console.log("IBT Yield:", ibtYield);
         
-        uint256 timeToMaturity = principalToken.maturity() - block.timestamp;
-        uint256 fixedRate = calculateFixedRate(timeToMaturity, curveInitialPrice);
-        
-        uint256 finalRate = ibtYield > fixedRate ? ibtYield : fixedRate;
-        require(finalRate <= MAX_REASONABLE_APY, "APY too high");
-        
-        return finalRate;
+        require(ibtYield <= MAX_REASONABLE_APY, "APY too high");
+        return ibtYield;
     }
 }
