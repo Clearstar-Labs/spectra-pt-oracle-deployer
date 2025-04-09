@@ -155,3 +155,18 @@ It will show the models diverge (because of compounding) with higher interest ra
 
 ![Example](images/PT_Token_Pricing_Comparison.jpg)
 
+## Initial APY Calculation
+
+The initial APY is derived from the Curve pool price using these steps:
+
+1. Get IBT/PT price from Curve pool's `last_prices()`
+2. Convert to underlying price using IBT's `previewRedeem`
+3. Calculate discount = 1 - currentPrice
+4. Calculate APY = discount / timeToMaturityInYears
+
+### Why this approach?
+- Uses market price from Curve pool as source of truth
+- Accounts for actual trading activity and market sentiment
+- Simple to verify and reproduce
+- For PT-fUSDC matches the current prices and APYs
+
