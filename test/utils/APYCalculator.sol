@@ -84,13 +84,64 @@ contract APYCalculator is Test {
         uint256 discount = UNIT - currentPrice;
         uint256 impliedAPY = (discount * UNIT) / timeToMaturityScaled;
         
-        console.log("IBT/PT Curve Price:", ibtPrice);
-        console.log("Underlying Price:", currentPrice);
-        console.log("Time to Maturity (years):", timeToMaturityScaled);
-        console.log("Discount:", discount);
-        console.log("Implied APY:", impliedAPY);
+        console.log("IBT/PT Curve Price (raw):", ibtPrice);
+        console.log("IBT/PT Curve Price (decimal):", _formatDecimal(ibtPrice));
+        console.log("Underlying Price (raw):", currentPrice);
+        console.log("Underlying Price (decimal):", _formatDecimal(currentPrice));
+        console.log("Time to Maturity in years (raw):", timeToMaturityScaled);
+        console.log("Time to Maturity in years (decimal):", _formatDecimal(timeToMaturityScaled));
+        console.log("Discount (raw):", discount);
+        console.log("Discount (%):", _formatPercent(discount));
+        console.log("Implied APY (raw):", impliedAPY);
+        console.log("Implied APY (%):", _formatPercent(impliedAPY));
         
         require(impliedAPY <= MAX_REASONABLE_APY, "APY too high");
         return impliedAPY;
+    }
+
+    // Helper function to format decimals (18 decimals to 5 decimal places)
+    function _formatDecimal(uint256 value) internal pure returns (string memory) {
+        uint256 scaled = (value * 100000) / UNIT;
+        uint256 whole = scaled / 100000;
+        uint256 fraction = scaled % 100000;
+        return string(abi.encodePacked(
+            vm.toString(whole),
+            ".",
+            _padZeros(vm.toString(fraction), 5)
+        ));
+    }
+
+    // Helper function to format percentage (18 decimals to 2 decimal places)
+    function _formatPercent(uint256 value) internal pure returns (string memory) {
+        uint256 scaled = (value * 10000) / UNIT;
+        uint256 whole = scaled / 100;
+        uint256 fraction = scaled % 100;
+        return string(abi.encodePacked(
+            vm.toString(whole),
+            ".",
+            _padZeros(vm.toString(fraction), 2),
+            "%"
+        ));
+    }
+
+    // Helper function to pad zeros
+    function _padZeros(string memory s, uint256 length) internal pure returns (string memory) {
+        bytes memory b = bytes(s);
+        bytes memory zeros = new bytes(length);
+        for (uint i = 0; i < length; i++) {
+            zeros[i] = "0";
+        }
+        if (b.length >= length) {
+            return s;
+        }
+        bytes memory result = new bytes(length);
+        uint256 padLength = length - b.length;
+        for (uint i = 0; i < padLength; i++) {
+            result[i] = "0";
+        }
+        for (uint i = 0; i < b.length; i++) {
+            result[i + padLength] = b[i];
+        }
+        return string(result);
     }
 }
