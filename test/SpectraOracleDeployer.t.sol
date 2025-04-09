@@ -46,7 +46,9 @@ contract SpectraOracleDeployerTest is Test {
     }
 
     function test_DeployOracle() public {
-        uint256 initialAPY = calculateImpliedAPY();
+        // uint256 initialAPY = calculateImpliedAPY();
+        // Initial APY of 5%
+        uint256 initialAPY = 0.051e18;
         
         // Deploy oracle
         address oracle = oracle_factory.createOracle(
@@ -118,6 +120,8 @@ contract SpectraOracleDeployerTest is Test {
         require(success, "Failed to get price_scale");
         uint256 curveInitialPrice = abi.decode(data, (uint256));
         console.log("curveInitialPrice:", curveInitialPrice);
+
+        // uint256 curveInitialPrice = 934000000000000000;
         
         uint256 impliedAPY = calculator.calculateInitialImpliedAPY(
             address(principalToken),
