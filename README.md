@@ -138,3 +138,19 @@ forge script script/DeployOracle.s.sol:DeployOracleScript --rpc-url $RPC_URL --p
 - Aligns with traditional finance markets
 
 - The gas on Base and other L2s is cheap so well worth it
+
+### Visualizing the models
+You can run the zcb_vs_linear.py script using:
+```shell
+python zcb_vs_linear.py
+```
+Using different values for:
+
+APY_PERCENT = 20  # 10% APY
+
+MATURITY_DAYS = 365  # 1-year maturity
+
+It will show the models diverge (because of compounding) with higher interest rates and durations.
+
+![Example](images/PT Token Pricing Comparison.jpg)
+
