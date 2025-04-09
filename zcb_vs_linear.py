@@ -42,7 +42,7 @@ def plot_results(time_left, zero_coupon, linear, maturity_days, apy_percent):
     plt.show()
 
 # Example usage
-APY_PERCENT = 50  # 10% APY
+APY_PERCENT = 20  # 10% APY
 MATURITY_DAYS = 365  # 1-year maturity
 
 time_left, zero_coupon, linear = calculate_prices(APY_PERCENT, MATURITY_DAYS)
