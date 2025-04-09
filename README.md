@@ -100,3 +100,29 @@ Ran 1 test suite in 7.21s (7.21s CPU time): 2 tests passed, 0 failed, 0 skipped 
 ```shell
 forge script script/DeployOracle.s.sol:DeployOracleScript --rpc-url $RPC_URL --private-key $PRIVATE_KEY -vvv
 ```
+<<<<<<< HEAD
+=======
+
+## Discount Model Selection
+
+### Zero Coupon Bond Model - currently selected
+✓ Follows standard bond pricing mathematics
+✓ Accounts for compound interest
+✓ Accurate for all PT durations
+✗ Higher computational complexity
+✗ Higher gas costs
+
+### Linear Discount Model
+✓ Simple calculations
+✓ Lower gas costs
+✓ Easy to understand
+✗ Ignores compound interest
+✗ Inaccurate for longer durations
+✗ Can produce negative prices
+
+### Why Zero Coupon?
+- Mathematically correct pricing prevents arbitrage
+- Works consistently across all time periods
+- Aligns with traditional finance markets
+- The gas on Base and other L2s is cheap so well worth it
+>>>>>>> 7a6b364 (Add a readme section on the discount model selection)
