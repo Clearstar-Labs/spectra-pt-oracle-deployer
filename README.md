@@ -24,6 +24,8 @@ ZCB_MODEL_ADDRESS="0xf0DB3482c20Fc6E124D5B5C60BdF30BD13EC87aE"
 ORACLE_FACTORY_ADDRESS and ZCB_MODEL_ADDRESS do not need to be changed if you are on Base.
 The PT and POOL addresses need to belong together.
 
+The POOL_ADDRESS is not the LP token but the pool itself. If you have the LP token address you can call minter to get the pool address.
+
 #### Oracle Parameters
 INITIAL_IMPLIED_APY="1000000000000000000" # 1.0 in 18 decimals
 ORACLE_OWNER="0x..." # Address that will own the oracle
