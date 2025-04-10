@@ -4,10 +4,17 @@ pragma solidity ^0.8.13;
 import {IPrincipalToken} from "../interfaces/IPrincipalToken.sol";
 import {IVaultV2} from "../interfaces/IVaultV2.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import {LiquidityChecker} from "./LiquidityChecker.sol";
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
 
 contract APYCalculator is Test {
+    LiquidityChecker public liquidityChecker;
+
+    constructor() {
+        liquidityChecker = new LiquidityChecker();
+    }
+
     uint256 private constant UNIT = 1e18;
     uint256 private constant SECONDS_PER_YEAR = 365 days;
     uint256 private constant SECONDS_PER_DAY = 1 days;
@@ -53,6 +60,7 @@ contract APYCalculator is Test {
         console.log("timeToMaturity (seconds):", timeToMaturity);
         console.log("Time to Maturity (scaled to 1e18):", timeToMaturityScaled);
         console.log("curve price:", curveInitialPrice);
+        
         console.log("discount:", discount);
         console.log("implied APY:", impliedAPY);
         
@@ -94,6 +102,9 @@ contract APYCalculator is Test {
         console.log("Discount (%):", _formatPercent(discount));
         console.log("Implied APY (raw):", impliedAPY);
         console.log("Implied APY (%):", _formatPercent(impliedAPY));
+
+        // Check pool liquidity
+        liquidityChecker.checkPoolLiquidity(curvePool);
         
         require(impliedAPY <= MAX_REASONABLE_APY, "APY too high");
         return impliedAPY;
