@@ -25,23 +25,29 @@ contract APYCalculator is Test {
     uint256 private constant MAX_REASONABLE_APY = 2e18;
 
     function calculateIBTYield(
-        IVaultV2 vault,
-        uint256 currentBlock
-    ) private returns (uint256) {
+        address vault
+    ) external returns (uint256) {
         uint256 blocksToGoBack = BLOCKS_PER_DAY * DAYS_TO_LOOK_BACK;
-        uint256 pastBlock = currentBlock - blocksToGoBack;
+        uint256 pastBlock = block.number - blocksToGoBack;
         
-        uint256 currentPricePerShare = vault.getPricePerFullShare();
+        // Get current price per share using ERC4626 standard functions
+        uint256 currentPricePerShare = IERC4626(vault).previewRedeem(UNIT);
         
         uint256 forkId = vm.createFork(vm.envString("RPC_URL"), pastBlock);
         vm.selectFork(forkId);
-        uint256 pastPricePerShare = vault.getPricePerFullShare();
+        // Get past price per share using ERC4626 standard functions
+        uint256 pastPricePerShare = IERC4626(vault).previewRedeem(UNIT);
         
         console.log("Current price per share:", currentPricePerShare);
         console.log("Past price per share:", pastPricePerShare);
         
-        return ((currentPricePerShare - pastPricePerShare) * SECONDS_PER_YEAR * UNIT) 
-               / (pastPricePerShare * (DAYS_TO_LOOK_BACK * SECONDS_PER_DAY));
+        uint256 ibtYield = ((currentPricePerShare - pastPricePerShare) * SECONDS_PER_YEAR * UNIT) 
+                          / (pastPricePerShare * (DAYS_TO_LOOK_BACK * SECONDS_PER_DAY));
+        
+        console.log("Estimated IBT yield (raw):", ibtYield);
+        console.log("Estimated IBT yield (%):", _formatPercent(ibtYield));
+        
+        return ibtYield;
     }
 
     function calculateFixedRate(

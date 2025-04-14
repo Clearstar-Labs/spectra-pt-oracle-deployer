@@ -92,4 +92,13 @@ contract SpectraOracleDeployerTest is Test {
         // Verify maturity is in the future
         assertTrue(maturityTimestamp > block.timestamp, "Should have future maturity");
     }
+
+    function test_calculateIBTYield() public {
+        // Get the IBT address
+        address ibt = principalToken.getIBT();
+        console.log("IBT address:", ibt);
+        
+        // Calculate and log IBT yield
+        calculator.calculateIBTYield(ibt);
+    }
 }
