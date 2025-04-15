@@ -17,6 +17,7 @@ contract SpectraOracleDeployerTest is Test {
     uint256 public fork;
     
     address public zcbModel;
+    address public linearModel;
     string public RPC_URL;
 
     function setUp() public {
@@ -26,6 +27,7 @@ contract SpectraOracleDeployerTest is Test {
         address pool = vm.envAddress("POOL_ADDRESS");
         address factory = vm.envAddress("ORACLE_FACTORY_ADDRESS");
         zcbModel = vm.envAddress("ZCB_MODEL_ADDRESS");
+        linearModel = vm.envAddress("LINEAR_MODEL_ADDRESS");
         
         // Create and select fork
         fork = vm.createFork(RPC_URL);
@@ -38,7 +40,7 @@ contract SpectraOracleDeployerTest is Test {
         calculator = new APYCalculator();
     }
 
-    function test_DeployOracle() public {
+    function test_DeployZCBOracle() public {
         uint256 initialAPY = calculator.calculateImpliedAPY(
             principalToken,
             curvePool
@@ -64,7 +66,37 @@ contract SpectraOracleDeployerTest is Test {
         
         // Get first price reading
         (,int256 price,,,) = deployedOracle.latestRoundData();
-        console.log("Initial oracle price:", uint256(price));
+        console.log("Initial ZCB oracle price:", uint256(price));
+        assertTrue(price > 0, "Price should be greater than 0");
+    }
+
+    function test_DeployLinearOracle() public {
+        uint256 initialAPY = calculator.calculateImpliedAPY(
+            principalToken,
+            curvePool
+        );
+        
+        // Deploy oracle
+        address oracle = oracle_factory.createOracle(
+            address(principalToken),
+            linearModel,
+            initialAPY,
+            address(this)
+        );
+        
+        console.log("Oracle deployed at:", oracle);
+        
+        // Verify oracle was created correctly
+        ISpectraPriceOracle deployedOracle = ISpectraPriceOracle(oracle);
+        
+        // Check oracle parameters
+        assertEq(deployedOracle.PT(), address(principalToken), "Wrong PT address");
+        assertEq(deployedOracle.discountModel(), linearModel, "Wrong discount model");
+        assertEq(deployedOracle.initialImpliedAPY(), initialAPY, "Wrong initial APY");
+        
+        // Get first price reading
+        (,int256 price,,,) = deployedOracle.latestRoundData();
+        console.log("Initial linear oracle price:", uint256(price));
         assertTrue(price > 0, "Price should be greater than 0");
     }
 
