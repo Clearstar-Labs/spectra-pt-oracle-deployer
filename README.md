@@ -172,3 +172,82 @@ The initial APY is derived from the Curve pool price using these steps:
 - Simple to verify and reproduce
 - For PT-fUSDC matches the current prices and APYs
 
+### Alternative approach - using IBT yield
+Mathematical steps:
+
+-Calculate price change: currentPricePerShare - pastPricePerShare
+
+-Calculate percentage change: priceChange / pastPricePerShare
+
+-Annualize the rate: percentageChange * (SECONDS_PER_YEAR / (DAYS_TO_LOOK_BACK * SECONDS_PER_DAY))
+
+-Scale by UNIT (1e18)
+
+Example:
+
+-Current price: 1.009971509971510014
+
+-Past price (1 day ago): 1.009861932938856059
+
+-Price change: 0.000109577032653955
+
+-Daily yield: 0.0001085 (0.01085%)
+
+-Annualized: 0.01085% * 365 = 3.96% APY
+
+### Comparison:
+
+#### IBT Yield Method:
+Advantages:
+
+-Based on actual yield generation
+
+-Reflects real market performance
+
+-Not dependent on trading activity
+
+-More stable over time
+
+Disadvantages:
+
+-Historical data might not predict future yield
+
+-Short lookback period might be volatile
+
+-Affected by temporary yield fluctuations
+
+Curve Pool Method:
+Advantages:
+
+-Market-driven price discovery
+
+-Reflects current market sentiment
+
+-Accounts for risk premium
+
+-Forward-looking (implied rate)
+
+#### Disadvantages:
+
+-Requires sufficient liquidity
+
+-Can be manipulated with large trades
+
+-More volatile
+
+-Dependent on active trading
+
+#### Usage Recommendations:
+
+-Primary: Use Curve Pool method when there's good liquidity and active trading
+
+Fallback: Use IBT Yield method when:
+
+-Curve pool lacks liquidity
+
+-Trading is thin
+
+-Need more stable rate estimates
+
+-The Curve pool method is generally preferred when market conditions are good because it represents actual market pricing of future yield, while the IBT yield method serves as a good fallback based on actual yield generation.
+
