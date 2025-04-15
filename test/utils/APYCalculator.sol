@@ -81,7 +81,7 @@ contract APYCalculator is Test {
 
         // Get current price from Curve pool (in IBT/PT terms)
         (bool success, bytes memory data) = curvePool.call(
-            abi.encodeWithSignature("last_prices()")
+            abi.encodeWithSignature("price_oracle()")
         );
         require(success, "Failed to get current price");
         uint256 ibtPrice = abi.decode(data, (uint256));
