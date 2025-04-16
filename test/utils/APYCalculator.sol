@@ -7,6 +7,7 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {LiquidityChecker} from "./LiquidityChecker.sol";
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
+import {LogExpMath} from "./LogExpMath.sol";
 
 contract APYCalculator is Test {
     LiquidityChecker public liquidityChecker;
@@ -79,25 +80,69 @@ contract APYCalculator is Test {
     ) external returns (uint256) {
         require(curvePool != address(0), "Curve pool not found");
 
+        // Get prices and validate
+        (uint256 ibtPrice, uint256 currentPrice) = _getPrices(pt, curvePool);
+        require(currentPrice >= MIN_CURVE_PRICE, "Curve price too low");
+        require(currentPrice <= MAX_CURVE_PRICE, "Curve price too high");
+
+        // Calculate time and rates
+        uint256 timeToMaturity = IPrincipalToken(pt).maturity() - block.timestamp;
+        uint256 impliedAPY = _calculateAPY(currentPrice, timeToMaturity);
+        uint256 impliedAPR = _calculateAPR(currentPrice, timeToMaturity);
+        
+        // Log values
+        _logValues(ibtPrice, currentPrice, timeToMaturity, impliedAPR, impliedAPY);
+
+        // Check pool liquidity
+        liquidityChecker.checkPoolLiquidity(curvePool);
+        
+        require(impliedAPY <= MAX_REASONABLE_APY, "APY too high");
+        return impliedAPY;
+    }
+
+    function _getPrices(IPrincipalToken pt, address curvePool) internal returns (uint256 ibtPrice, uint256 currentPrice) {
         // Get current price from Curve pool (in IBT/PT terms)
         (bool success, bytes memory data) = curvePool.call(
             abi.encodeWithSignature("price_oracle()")
         );
         require(success, "Failed to get current price");
-        uint256 ibtPrice = abi.decode(data, (uint256));
+        ibtPrice = abi.decode(data, (uint256));
         
         // Convert IBT price to underlying price using IBT's previewRedeem
         address ibt = IPrincipalToken(pt).getIBT();
-        uint256 currentPrice = IERC4626(ibt).previewRedeem(ibtPrice);
-        
-        require(currentPrice >= MIN_CURVE_PRICE, "Curve price too low");
-        require(currentPrice <= MAX_CURVE_PRICE, "Curve price too high");
+        currentPrice = IERC4626(ibt).previewRedeem(ibtPrice);
+    }
 
-        uint256 timeToMaturity = IPrincipalToken(pt).maturity() - block.timestamp;
+    function _calculateAPY(uint256 currentPrice, uint256 timeToMaturity) internal pure returns (uint256) {
+        uint256 timeToMaturityScaled = (timeToMaturity * UNIT) / SECONDS_PER_YEAR;
+        uint256 baseUint = (UNIT * UNIT) / currentPrice;
+        require(baseUint > 0, "Base must be positive");
+        int256 base = int256(baseUint);
+        require(base > 0, "Negative base not allowed");
+
+        int256 exponent = (int256(SECONDS_PER_YEAR) * int256(UNIT)) / int256(timeToMaturity);
+        int256 ratePerSecond = LogExpMath.ln(base);
+        int256 power = (ratePerSecond * exponent) / int256(UNIT);
+        int256 result = LogExpMath.exp(power);
+        return uint256(result - int256(UNIT));
+    }
+
+    function _calculateAPR(uint256 currentPrice, uint256 timeToMaturity) internal pure returns (uint256) {
         uint256 timeToMaturityScaled = (timeToMaturity * UNIT) / SECONDS_PER_YEAR;
         uint256 discount = UNIT - currentPrice;
-        uint256 impliedAPY = (discount * UNIT) / timeToMaturityScaled;
-        
+        return (discount * UNIT) / timeToMaturityScaled;
+    }
+
+    function _logValues(
+        uint256 ibtPrice, 
+        uint256 currentPrice, 
+        uint256 timeToMaturity,
+        uint256 impliedAPR,
+        uint256 impliedAPY
+    ) internal pure {
+        uint256 timeToMaturityScaled = (timeToMaturity * UNIT) / SECONDS_PER_YEAR;
+        uint256 discount = UNIT - currentPrice;
+
         console.log("IBT/PT Curve Price (raw):", ibtPrice);
         console.log("IBT/PT Curve Price (decimal):", _formatDecimal(ibtPrice));
         console.log("Underlying Price (raw):", currentPrice);
@@ -106,14 +151,10 @@ contract APYCalculator is Test {
         console.log("Time to Maturity in years (decimal):", _formatDecimal(timeToMaturityScaled));
         console.log("Discount (raw):", discount);
         console.log("Discount (%):", _formatPercent(discount));
+        console.log("Implied APR (raw):", impliedAPR);
+        console.log("Implied APR (%):", _formatPercent(impliedAPR));
         console.log("Implied APY (raw):", impliedAPY);
         console.log("Implied APY (%):", _formatPercent(impliedAPY));
-
-        // Check pool liquidity
-        liquidityChecker.checkPoolLiquidity(curvePool);
-        
-        require(impliedAPY <= MAX_REASONABLE_APY, "APY too high");
-        return impliedAPY;
     }
 
     // Helper function to format decimals (18 decimals to 5 decimal places)
