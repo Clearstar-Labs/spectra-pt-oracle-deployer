@@ -11,7 +11,7 @@ contract DeployOracleScript is Script {
         // Load environment variables
         address factory = vm.envAddress("ORACLE_FACTORY_ADDRESS");
         address pt = vm.envAddress("PT_ADDRESS");
-        address zcbModel = vm.envAddress("ZCB_MODEL_ADDRESS");
+        address discountModel = vm.envAddress("LINEAR_MODEL_ADDRESS");
         uint256 initialAPY = vm.envUint("INITIAL_IMPLIED_APY");
         address owner = vm.envAddress("ORACLE_OWNER");
 
@@ -20,7 +20,7 @@ contract DeployOracleScript is Script {
         // Deploy oracle
         address oracle = ISpectraPriceOracleFactory(factory).createOracle(
             pt,
-            zcbModel,
+            discountModel,
             initialAPY,
             owner
         );
