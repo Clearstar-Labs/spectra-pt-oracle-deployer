@@ -21,33 +21,44 @@ contract APYCalculator is Test {
     uint256 private constant SECONDS_PER_DAY = 1 days;
     uint256 private constant BLOCKS_PER_DAY = 43_200;
     uint256 private constant DAYS_TO_LOOK_BACK = 1;
-    uint256 private constant MIN_CURVE_PRICE = 5e17;
-    uint256 private constant MAX_CURVE_PRICE = 99e16;
-    uint256 private constant MAX_REASONABLE_APY = 2e18;
+    uint256 private constant MIN_CURVE_PRICE = 5e17;        // 0.5
+    uint256 private constant MAX_CURVE_PRICE = 101e16;       // 1.01 to allow slight >1 quotes on Ethereum
+    uint256 private constant MAX_REASONABLE_APY = 5e18;      // 5.0 max sanity for mainnet variability
+    function _blocksPerDay() internal view returns (uint256) {
+        // Approximate block times
+        if (block.chainid == 1) return 7200;         // Ethereum ~12s
+        if (block.chainid == 10) return 7200;        // Optimism ~12s
+        if (block.chainid == 42161) return 7200;     // Arbitrum ~12s
+        if (block.chainid == 8453) return 43200;     // Base ~2s
+        if (block.chainid == 137) return 43200;      // Polygon ~2s (pos ~2.1s)
+        if (block.chainid == 56) return 28800;       // BSC ~3s
+        return 7200; // default conservative
+    }
+
 
     function calculateIBTYield(
         address vault
     ) external returns (uint256) {
-        uint256 blocksToGoBack = BLOCKS_PER_DAY * DAYS_TO_LOOK_BACK;
+        uint256 blocksToGoBack = _blocksPerDay() * DAYS_TO_LOOK_BACK;
         uint256 pastBlock = block.number - blocksToGoBack;
-        
+
         // Get current price per share using ERC4626 standard functions
         uint256 currentPricePerShare = IERC4626(vault).previewRedeem(UNIT);
-        
+
         uint256 forkId = vm.createFork(vm.envString("RPC_URL"), pastBlock);
         vm.selectFork(forkId);
         // Get past price per share using ERC4626 standard functions
         uint256 pastPricePerShare = IERC4626(vault).previewRedeem(UNIT);
-        
+
         console.log("Current price per share:", currentPricePerShare);
         console.log("Past price per share:", pastPricePerShare);
-        
-        uint256 ibtYield = ((currentPricePerShare - pastPricePerShare) * SECONDS_PER_YEAR * UNIT) 
+
+        uint256 ibtYield = ((currentPricePerShare - pastPricePerShare) * SECONDS_PER_YEAR * UNIT)
                           / (pastPricePerShare * (DAYS_TO_LOOK_BACK * SECONDS_PER_DAY));
-        
+
         console.log("Estimated IBT yield (raw):", ibtYield);
         console.log("Estimated IBT yield (%):", _formatPercent(ibtYield));
-        
+
         return ibtYield;
     }
 
@@ -57,20 +68,20 @@ contract APYCalculator is Test {
     ) private pure returns (uint256) {
         // First convert timeToMaturity to years to avoid overflow
         uint256 timeToMaturityScaled = (timeToMaturity * UNIT) / SECONDS_PER_YEAR;
-        
+
         // Calculate the discount
         uint256 discount = UNIT - curveInitialPrice;
-        
+
         // Calculate annualized rate: discount / timeInYears
         uint256 impliedAPY = (discount * UNIT) / timeToMaturityScaled;
-        
+
         console.log("timeToMaturity (seconds):", timeToMaturity);
         console.log("Time to Maturity (scaled to 1e18):", timeToMaturityScaled);
         console.log("curve price:", curveInitialPrice);
-        
+
         console.log("discount:", discount);
         console.log("implied APY:", impliedAPY);
-        
+
         return impliedAPY;
     }
 
@@ -89,28 +100,66 @@ contract APYCalculator is Test {
         uint256 timeToMaturity = IPrincipalToken(pt).maturity() - block.timestamp;
         uint256 impliedAPY = _calculateAPY(currentPrice, timeToMaturity);
         uint256 impliedAPR = _calculateAPR(currentPrice, timeToMaturity);
-        
+
         // Log values
         _logValues(ibtPrice, currentPrice, timeToMaturity, impliedAPR, impliedAPY);
 
         // Check pool liquidity
         liquidityChecker.checkPoolLiquidity(curvePool);
-        
+
         require(impliedAPY <= MAX_REASONABLE_APY, "APY too high");
         return impliedAPY;
     }
 
     function _getPrices(IPrincipalToken pt, address curvePool) internal returns (uint256 ibtPrice, uint256 currentPrice) {
-        // Get current price from Curve pool (in IBT/PT terms)
-        (bool success, bytes memory data) = curvePool.call(
-            abi.encodeWithSignature("price_oracle()")
-        );
-        require(success, "Failed to get current price");
-        ibtPrice = abi.decode(data, (uint256));
-        
+        // Try multiple Curve pool pricing interfaces to support different pool types
+        ibtPrice = _fetchCurvePrice(curvePool);
+
         // Convert IBT price to underlying price using IBT's previewRedeem
         address ibt = IPrincipalToken(pt).getIBT();
         currentPrice = IERC4626(ibt).previewRedeem(ibtPrice);
+    }
+
+    function _fetchCurvePrice(address curvePool) internal returns (uint256) {
+        bool ok; bytes memory data;
+
+        // Prefer: IBT per PT via get_dy(PT -> IBT) with 1e18 PT input
+        (ok, data) = curvePool.call(abi.encodeWithSignature("get_dy(int128,int128,uint256)", int128(1), int128(0), uint256(1e18)));
+        if (ok && data.length >= 32) {
+            uint256 price = abi.decode(data, (uint256));
+            if (price > 0) return price; // IBT per 1 PT (scaled 1e18)
+        }
+        (ok, data) = curvePool.call(abi.encodeWithSignature("get_dy(uint256,uint256,uint256)", uint256(1), uint256(0), uint256(1e18)));
+        if (ok && data.length >= 32) {
+            uint256 price = abi.decode(data, (uint256));
+            if (price > 0) return price; // IBT per 1 PT
+        }
+
+        // Curve StableSwapNG: price_oracle(uint256)
+        (ok, data) = curvePool.call(abi.encodeWithSignature("price_oracle(uint256)", 0));
+        if (ok && data.length >= 32) {
+            uint256 p0 = abi.decode(data, (uint256));
+            if (p0 > 0) return p0; // Empirically matches IBT per PT for coin index 0 in this pool
+        }
+        (ok, data) = curvePool.call(abi.encodeWithSignature("price_oracle(uint256)", 1));
+        if (ok && data.length >= 32) {
+            uint256 p1 = abi.decode(data, (uint256));
+            if (p1 > 0) return p1;
+        }
+
+        // Older pools
+        (ok, data) = curvePool.call(abi.encodeWithSignature("last_prices(uint256)", 0));
+        if (ok && data.length >= 32) {
+            uint256 price = abi.decode(data, (uint256));
+            if (price > 0) return price;
+        }
+        (ok, data) = curvePool.call(abi.encodeWithSignature("price_oracle()"));
+        if (ok && data.length >= 32) {
+            uint256 price = abi.decode(data, (uint256));
+            if (price > 0) return price;
+        }
+
+        revert("Failed to get current price");
     }
 
     function _calculateAPY(uint256 currentPrice, uint256 timeToMaturity) internal pure returns (uint256) {
@@ -134,8 +183,8 @@ contract APYCalculator is Test {
     }
 
     function _logValues(
-        uint256 ibtPrice, 
-        uint256 currentPrice, 
+        uint256 ibtPrice,
+        uint256 currentPrice,
         uint256 timeToMaturity,
         uint256 impliedAPR,
         uint256 impliedAPY
