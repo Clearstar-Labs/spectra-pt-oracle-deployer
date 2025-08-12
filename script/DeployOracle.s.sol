@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
 import {ISpectraPriceOracleFactory} from "../test/interfaces/ISpectraPriceOracleFactory.sol";
+import {ISpectraPriceOracle} from "../test/interfaces/ISpectraPriceOracle.sol";
 
 contract DeployOracleScript is Script {
     function setUp() public {}
@@ -36,6 +37,17 @@ contract DeployOracleScript is Script {
         );
 
         console.log("Oracle deployed at:", oracle);
+
+        // Sanity checks on the deployed oracle so dry-runs fail fast if config is wrong
+        require(oracle != address(0), "oracle address is zero");
+        ISpectraPriceOracle deployed = ISpectraPriceOracle(oracle);
+        require(deployed.PT() == pt, "oracle PT mismatch");
+        require(deployed.discountModel() == discountModel, "oracle model mismatch");
+        require(deployed.initialImpliedAPY() == initialAPY, "oracle APY mismatch");
+
+        (, int256 price, , ,) = deployed.latestRoundData();
+        console.log("Oracle latest price:", uint256(price));
+        require(price > 0, "oracle price must be > 0");
 
         vm.stopBroadcast();
     }
