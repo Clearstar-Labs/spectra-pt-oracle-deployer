@@ -8,6 +8,7 @@ import {LiquidityChecker} from "./LiquidityChecker.sol";
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
 import {LogExpMath} from "./LogExpMath.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 contract APYCalculator is Test {
     LiquidityChecker public liquidityChecker;
@@ -112,24 +113,35 @@ contract APYCalculator is Test {
     }
 
     function _getPrices(IPrincipalToken pt, address curvePool) internal returns (uint256 ibtPrice, uint256 currentPrice) {
+        address ibt = IPrincipalToken(pt).getIBT();
+        address underlying = IERC4626(ibt).asset();
+
+        uint8 ptDecimals = IERC20Metadata(address(pt)).decimals();
+        uint8 ibtDecimals = IERC20Metadata(ibt).decimals();
+        uint8 underlyingDecimals = IERC20Metadata(underlying).decimals();
+
+        uint256 ptUnit = 10 ** uint256(ptDecimals);
+
         // Try multiple Curve pool pricing interfaces to support different pool types
-        ibtPrice = _fetchCurvePrice(curvePool);
+        uint256 rawIbtPrice = _fetchCurvePrice(curvePool, ptUnit);
 
         // Convert IBT price to underlying price using IBT's previewRedeem
-        address ibt = IPrincipalToken(pt).getIBT();
-        currentPrice = IERC4626(ibt).previewRedeem(ibtPrice);
+        uint256 rawUnderlyingPrice = IERC4626(ibt).previewRedeem(rawIbtPrice);
+
+        ibtPrice = _normalizeTo1e18(rawIbtPrice, ibtDecimals);
+        currentPrice = _normalizeTo1e18(rawUnderlyingPrice, underlyingDecimals);
     }
 
-    function _fetchCurvePrice(address curvePool) internal returns (uint256) {
+    function _fetchCurvePrice(address curvePool, uint256 ptAmount) internal returns (uint256) {
         bool ok; bytes memory data;
 
         // Prefer: IBT per PT via get_dy(PT -> IBT) with 1e18 PT input
-        (ok, data) = curvePool.call(abi.encodeWithSignature("get_dy(int128,int128,uint256)", int128(1), int128(0), uint256(1e18)));
+        (ok, data) = curvePool.call(abi.encodeWithSignature("get_dy(int128,int128,uint256)", int128(1), int128(0), ptAmount));
         if (ok && data.length >= 32) {
             uint256 price = abi.decode(data, (uint256));
             if (price > 0) return price; // IBT per 1 PT (scaled 1e18)
         }
-        (ok, data) = curvePool.call(abi.encodeWithSignature("get_dy(uint256,uint256,uint256)", uint256(1), uint256(0), uint256(1e18)));
+        (ok, data) = curvePool.call(abi.encodeWithSignature("get_dy(uint256,uint256,uint256)", uint256(1), uint256(0), ptAmount));
         if (ok && data.length >= 32) {
             uint256 price = abi.decode(data, (uint256));
             if (price > 0) return price; // IBT per 1 PT
@@ -139,27 +151,41 @@ contract APYCalculator is Test {
         (ok, data) = curvePool.call(abi.encodeWithSignature("price_oracle(uint256)", 0));
         if (ok && data.length >= 32) {
             uint256 p0 = abi.decode(data, (uint256));
-            if (p0 > 0) return p0; // Empirically matches IBT per PT for coin index 0 in this pool
+            if (p0 > 0) return (p0 * ptAmount) / 1e18; // Empirically matches IBT per PT for coin index 0 in this pool
         }
         (ok, data) = curvePool.call(abi.encodeWithSignature("price_oracle(uint256)", 1));
         if (ok && data.length >= 32) {
             uint256 p1 = abi.decode(data, (uint256));
-            if (p1 > 0) return p1;
+            if (p1 > 0) return (p1 * ptAmount) / 1e18;
         }
 
         // Older pools
         (ok, data) = curvePool.call(abi.encodeWithSignature("last_prices(uint256)", 0));
         if (ok && data.length >= 32) {
             uint256 price = abi.decode(data, (uint256));
-            if (price > 0) return price;
+            if (price > 0) return (price * ptAmount) / 1e18;
         }
         (ok, data) = curvePool.call(abi.encodeWithSignature("price_oracle()"));
         if (ok && data.length >= 32) {
             uint256 price = abi.decode(data, (uint256));
-            if (price > 0) return price;
+            if (price > 0) return (price * ptAmount) / 1e18;
         }
 
         revert("Failed to get current price");
+    }
+
+    function _normalizeTo1e18(uint256 amount, uint8 tokenDecimals) internal pure returns (uint256) {
+        if (tokenDecimals == 18) {
+            return amount;
+        }
+
+        if (tokenDecimals > 18) {
+            uint256 scaleDown = 10 ** uint256(tokenDecimals - 18);
+            return amount / scaleDown;
+        }
+
+        uint256 scaleUp = 10 ** uint256(18 - tokenDecimals);
+        return amount * scaleUp;
     }
 
     function _calculateAPY(uint256 currentPrice, uint256 timeToMaturity) internal pure returns (uint256) {
